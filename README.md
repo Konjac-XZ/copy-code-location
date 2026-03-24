@@ -43,6 +43,12 @@ packages/client/src/client/streamableHttp.ts:221-221
 | Copy with Relative Path | `Ctrl+Alt+L` | `Ctrl+Alt+L` |
 | Copy with Absolute Path | `Ctrl+Alt+Shift+L` | `Ctrl+Alt+Shift+L` |
 
+## Command Access
+
+- Command Palette (`Ctrl+Shift+P`)
+- Keyboard shortcuts
+- Editor right-click context menu
+
 ## How It Works
 
 - **Relative Path**: Calculates path from workspace root. Works correctly with multi-folder workspaces.
