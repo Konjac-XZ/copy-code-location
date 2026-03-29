@@ -1,6 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 const vscode = require('vscode');
 const path = require('path');
+const LanguageResolver = require('./languageResolver');
 
 /**
  * Get the relative path from the workspace folder to the file
@@ -73,8 +74,11 @@ async function copyCodeWithPath(useAbsolutePath) {
 	// Get line range
 	const lineRange = getLineRange(selection);
 
+	// Resolve language identifier for syntax highlighting in markdown
+	const languageId = LanguageResolver.resolve(filePath);
+
 	// Format the output
-	const formattedContent = `${displayPath}:${lineRange}\n\`\`\`\n${selectedText}\n\`\`\``;
+	const formattedContent = `${displayPath}:${lineRange}\n\`\`\`${languageId}\n${selectedText}\n\`\`\``;
 
 	// Copy to clipboard
 	await vscode.env.clipboard.writeText(formattedContent);
