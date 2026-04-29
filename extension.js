@@ -91,6 +91,37 @@ async function copyCodeWithPath(useAbsolutePath) {
 	setTimeout(() => statusBarItem.dispose(), 2000);
 }
 
+async function pasteAsCodeBlock() {
+	const editor = vscode.window.activeTextEditor;
+
+	if (!editor) {
+		vscode.window.showWarningMessage('No active editor');
+		return;
+	}
+
+	const clipboardText = await vscode.env.clipboard.readText();
+
+	if (!clipboardText) {
+		vscode.window.showWarningMessage('Clipboard is empty');
+		return;
+	}
+
+	const wrappedContent = `\`\`\`\n${clipboardText}\n\`\`\``;
+
+	await editor.edit(editBuilder => {
+		if (editor.selection.isEmpty) {
+			editBuilder.insert(editor.selection.active, wrappedContent);
+		} else {
+			editBuilder.replace(editor.selection, wrappedContent);
+		}
+	});
+
+	const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
+	statusBarItem.text = '$(check) Pasted as code block';
+	statusBarItem.show();
+	setTimeout(() => statusBarItem.dispose(), 2000);
+}
+
 /**
  * @param {vscode.ExtensionContext} context
  */
@@ -109,6 +140,12 @@ function activate(context) {
 
 	context.subscriptions.push(copyRelativeDisposable);
 	context.subscriptions.push(copyAbsoluteDisposable);
+
+	const pasteCodeBlockDisposable = vscode.commands.registerCommand(
+		'copy-code-location.pasteCodeBlock',
+		() => pasteAsCodeBlock()
+	);
+	context.subscriptions.push(pasteCodeBlockDisposable);
 }
 
 function deactivate() { }

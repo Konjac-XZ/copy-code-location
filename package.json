@@ -2,7 +2,7 @@
 	"name": "copy-code-location",
 	"displayName": "Copy Code Location",
 	"description": "Copy selected code with file path and line numbers, optimized for sharing with LLMs. Supports both relative and absolute paths.",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"engines": {
 		"vscode": "^1.96.0"
 	},
@@ -42,6 +42,10 @@
 			{
 				"command": "copy-code-location.copyAbsolute",
 				"title": "Copy Code with Absolute Path"
+			},
+			{
+				"command": "copy-code-location.pasteCodeBlock",
+				"title": "Paste as Code Block"
 			}
 		],
 		"keybindings": [
@@ -55,6 +59,12 @@
 				"command": "copy-code-location.copyAbsolute",
 				"key": "ctrl+alt+shift+L",
 				"mac": "ctrl+alt+shift+L",
+				"when": "editorTextFocus"
+			},
+			{
+				"command": "copy-code-location.pasteCodeBlock",
+				"key": "ctrl+alt+shift+V",
+				"mac": "ctrl+alt+shift+V",
 				"when": "editorTextFocus"
 			}
 		]
