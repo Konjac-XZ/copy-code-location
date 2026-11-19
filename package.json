@@ -31,7 +31,9 @@
 		"line-numbers",
 		"LLM"
 	],
-	"activationEvents": [],
+	"activationEvents": [
+		"onStartupFinished"
+	],
 	"main": "./extension.js",
 	"contributes": {
 		"commands": [
@@ -46,20 +48,28 @@
 			{
 				"command": "copy-code-location.pasteCodeBlock",
 				"title": "Paste as Code Block"
+			},
+			{
+				"command": "copy-code-location.toggleCtrlCCopy",
+				"title": "Toggle Ctrl+C Relative Path Copy"
+			},
+			{
+				"command": "copy-code-location.toggleAutoWordFallback",
+				"title": "Toggle Automatic Word Fallback"
 			}
 		],
 		"keybindings": [
 			{
 				"command": "copy-code-location.copyRelative",
-				"key": "ctrl+alt+L",
-				"mac": "ctrl+alt+L",
-				"when": "editorTextFocus"
+				"key": "ctrl+c",
+				"mac": "cmd+c",
+				"when": "editorTextFocus && copy-code-location.ctrlCCopyEnabled"
 			},
 			{
-				"command": "copy-code-location.copyAbsolute",
-				"key": "ctrl+alt+shift+L",
-				"mac": "ctrl+alt+shift+L",
-				"when": "editorTextFocus"
+				"command": "editor.action.clipboardCopyAction",
+				"key": "ctrl+shift+c",
+				"mac": "cmd+shift+c",
+				"when": "editorTextFocus && copy-code-location.ctrlCCopyEnabled"
 			},
 			{
 				"command": "copy-code-location.pasteCodeBlock",
@@ -107,6 +117,11 @@
 					"type": "boolean",
 					"default": true,
 					"description": "Copy a complete valid JSON object as plain text, without its path, line number, or Markdown code fence."
+				},
+				"copy-code-location.relativePathCopyMode": {
+					"type": "boolean",
+					"default": false,
+					"description": "Use Relative Path Copy Mode so Ctrl+C copies selected code with its relative path instead of invoking the standard VS Code copy action."
 				}
 			}
 		},

@@ -2,6 +2,9 @@
 const vscode = require('vscode');
 const LanguageResolver = require('./languageResolver');
 
+const CTRL_C_CONTEXT_KEY = 'copy-code-location.ctrlCCopyEnabled';
+const CTRL_C_STATE_KEY = 'ctrlCCopyEnabled';
+const RELATIVE_PATH_COPY_MODE_SETTING_KEY = 'relativePathCopyMode';
 const AUTO_WORD_FALLBACK_SETTING_KEY = 'autoWordFallback';
 const JSON_OBJECT_FALLBACK_SETTING_KEY = 'jsonObjectFallback';
 const LOCATION_FORMAT_SETTING_KEY = 'locationFormat';
@@ -182,6 +185,26 @@ async function migrateLocationFormatSettings() {
 			await configuration.update(LEGACY_OMIT_LINE_NUMBERS_SETTING_KEY, undefined, target);
 		}
 	}
+}
+
+/**
+ * Get whether Ctrl+C should copy code with a relative path.
+ * @returns {boolean}
+ */
+function getCtrlCCopyEnabled() {
+	return vscode.workspace
+		.getConfiguration('copy-code-location')
+		.get(RELATIVE_PATH_COPY_MODE_SETTING_KEY, false);
+}
+
+/**
+ * Update a boolean setting for the current workspace.
+ * @param {string} settingKey - The setting name without the extension prefix
+ * @param {boolean} enabled - The new setting value
+ */
+async function updateBooleanSetting(settingKey, enabled) {
+	const configuration = vscode.workspace.getConfiguration('copy-code-location');
+	await configuration.update(settingKey, enabled, vscode.ConfigurationTarget.Workspace);
 }
 
 /**
@@ -425,9 +448,112 @@ async function pasteAsCodeBlock() {
 }
 
 /**
+ * Get the visible status bar presentation for the Ctrl+C copy mode.
+ * @param {boolean} enabled - Whether Ctrl+C relative path copy is enabled
+ * @returns {{text: string, tooltip: string, accessibilityLabel: string}}
+ */
+function getCtrlCCopyStatusPresentation(enabled) {
+	if (enabled) {
+		return {
+			text: '$(check) Path Copy',
+			tooltip: 'Ctrl+C copies selected code with its relative path. Click to disable.',
+			accessibilityLabel: 'Relative path copy mode enabled'
+		};
+	}
+
+	return {
+		text: '$(circle-slash) Path Copy',
+		tooltip: 'Ctrl+C uses the standard VS Code copy action. Click to enable relative path copy.',
+		accessibilityLabel: 'Relative path copy mode disabled'
+	};
+}
+
+/**
+ * Get the visible status bar presentation for automatic word fallback.
+ * @param {boolean} enabled - Whether automatic word fallback is enabled
+ * @returns {{text: string, tooltip: string, accessibilityLabel: string}}
+ */
+function getAutoWordFallbackStatusPresentation(enabled) {
+	if (enabled) {
+		return {
+			text: '$(whole-word) Word Fallback',
+			tooltip: 'Partial single-line selections copy as plain text. Click to disable.',
+			accessibilityLabel: 'Automatic word fallback enabled'
+		};
+	}
+
+	return {
+		text: '$(circle-slash) Word Fallback',
+		tooltip: 'Partial single-line selections keep path formatting. Click to enable plain-text fallback.',
+		accessibilityLabel: 'Automatic word fallback disabled'
+	};
+}
+
+/**
+ * Update the persistent Ctrl+C mode status bar item.
+ * @param {vscode.StatusBarItem} statusBarItem - The item to update
+ * @param {boolean} enabled - Whether Ctrl+C relative path copy is enabled
+ */
+function updateCtrlCCopyStatusBar(statusBarItem, enabled) {
+	const presentation = getCtrlCCopyStatusPresentation(enabled);
+	statusBarItem.text = presentation.text;
+	statusBarItem.tooltip = presentation.tooltip;
+	statusBarItem.color = enabled
+		? new vscode.ThemeColor('charts.green')
+		: undefined;
+	statusBarItem.backgroundColor = undefined;
+	statusBarItem.accessibilityInformation = {
+		label: presentation.accessibilityLabel,
+		role: 'button'
+	};
+}
+
+/**
+ * Update the persistent automatic word fallback status bar item.
+ * @param {vscode.StatusBarItem} statusBarItem - The item to update
+ * @param {boolean} enabled - Whether automatic word fallback is enabled
+ */
+function updateAutoWordFallbackStatusBar(statusBarItem, enabled) {
+	const presentation = getAutoWordFallbackStatusPresentation(enabled);
+	statusBarItem.text = presentation.text;
+	statusBarItem.tooltip = presentation.tooltip;
+	statusBarItem.color = enabled
+		? new vscode.ThemeColor('charts.green')
+		: undefined;
+	statusBarItem.backgroundColor = undefined;
+	statusBarItem.accessibilityInformation = {
+		label: presentation.accessibilityLabel,
+		role: 'button'
+	};
+}
+
+/**
  * @param {vscode.ExtensionContext} context
  */
 async function activate(context) {
+	const ctrlCCopyConfiguration = vscode.workspace
+		.getConfiguration('copy-code-location');
+	const ctrlCCopyInspection = ctrlCCopyConfiguration.inspect(
+		RELATIVE_PATH_COPY_MODE_SETTING_KEY
+	);
+	const hasConfiguredCtrlCCopyValue = [
+		ctrlCCopyInspection?.globalValue,
+		ctrlCCopyInspection?.workspaceValue,
+		ctrlCCopyInspection?.workspaceFolderValue
+	].some(value => value !== undefined);
+	const legacyCtrlCCopyEnabled = context.globalState.get(CTRL_C_STATE_KEY);
+
+	if (!hasConfiguredCtrlCCopyValue && legacyCtrlCCopyEnabled !== undefined) {
+		await ctrlCCopyConfiguration.update(
+			RELATIVE_PATH_COPY_MODE_SETTING_KEY,
+			legacyCtrlCCopyEnabled,
+			vscode.ConfigurationTarget.Global
+		);
+	}
+
+	if (legacyCtrlCCopyEnabled !== undefined) {
+		await context.globalState.update(CTRL_C_STATE_KEY, undefined);
+	}
 	await migrateLocationFormatSettings();
 
 	// Register relative path copy command
@@ -449,7 +575,91 @@ async function activate(context) {
 		'copy-code-location.pasteCodeBlock',
 		() => pasteAsCodeBlock()
 	);
-	context.subscriptions.push(pasteCodeBlockDisposable);
+
+	const ctrlCCopyStatusBarItem = vscode.window.createStatusBarItem(
+		'copy-code-location.ctrlCCopyToggle',
+		vscode.StatusBarAlignment.Right,
+		10000
+	);
+	ctrlCCopyStatusBarItem.name = 'Relative Path Copy Mode';
+	ctrlCCopyStatusBarItem.command = 'copy-code-location.toggleCtrlCCopy';
+	updateCtrlCCopyStatusBar(ctrlCCopyStatusBarItem, getCtrlCCopyEnabled());
+	ctrlCCopyStatusBarItem.show();
+
+	const autoWordFallbackStatusBarItem = vscode.window.createStatusBarItem(
+		'copy-code-location.autoWordFallbackToggle',
+		vscode.StatusBarAlignment.Right,
+		9999
+	);
+	autoWordFallbackStatusBarItem.name = 'Automatic Word Fallback';
+	autoWordFallbackStatusBarItem.command = 'copy-code-location.toggleAutoWordFallback';
+	updateAutoWordFallbackStatusBar(
+		autoWordFallbackStatusBarItem,
+		getAutoWordFallbackEnabled()
+	);
+	autoWordFallbackStatusBarItem.show();
+
+	const toggleCtrlCCopyDisposable = vscode.commands.registerCommand(
+		'copy-code-location.toggleCtrlCCopy',
+		async () => {
+			const ctrlCCopyEnabled = !getCtrlCCopyEnabled();
+			await updateBooleanSetting(
+				RELATIVE_PATH_COPY_MODE_SETTING_KEY,
+				ctrlCCopyEnabled
+			);
+			await vscode.commands.executeCommand(
+				'setContext',
+				CTRL_C_CONTEXT_KEY,
+				ctrlCCopyEnabled
+			);
+			updateCtrlCCopyStatusBar(ctrlCCopyStatusBarItem, ctrlCCopyEnabled);
+		}
+	);
+
+	const toggleAutoWordFallbackDisposable = vscode.commands.registerCommand(
+		'copy-code-location.toggleAutoWordFallback',
+		async () => {
+			const enabled = !getAutoWordFallbackEnabled();
+			await updateBooleanSetting(AUTO_WORD_FALLBACK_SETTING_KEY, enabled);
+			updateAutoWordFallbackStatusBar(autoWordFallbackStatusBarItem, enabled);
+		}
+	);
+
+	const configurationChangeDisposable = vscode.workspace.onDidChangeConfiguration(
+		async event => {
+			if (event.affectsConfiguration('copy-code-location.relativePathCopyMode')) {
+				const ctrlCCopyEnabled = getCtrlCCopyEnabled();
+				await vscode.commands.executeCommand(
+					'setContext',
+					CTRL_C_CONTEXT_KEY,
+					ctrlCCopyEnabled
+				);
+				updateCtrlCCopyStatusBar(ctrlCCopyStatusBarItem, ctrlCCopyEnabled);
+			}
+
+			if (event.affectsConfiguration('copy-code-location.autoWordFallback')) {
+				updateAutoWordFallbackStatusBar(
+					autoWordFallbackStatusBarItem,
+					getAutoWordFallbackEnabled()
+				);
+			}
+		}
+	);
+
+	await vscode.commands.executeCommand(
+		'setContext',
+		CTRL_C_CONTEXT_KEY,
+		getCtrlCCopyEnabled()
+	);
+
+	context.subscriptions.push(
+		pasteCodeBlockDisposable,
+		toggleCtrlCCopyDisposable,
+		toggleAutoWordFallbackDisposable,
+		configurationChangeDisposable,
+		ctrlCCopyStatusBarItem,
+		autoWordFallbackStatusBarItem
+	);
 }
 
 function deactivate() { }
@@ -467,5 +677,7 @@ module.exports = {
 	normalizeLocationFormat,
 	shouldUseAutoWordFallback,
 	isCompleteJsonObject,
-	buildCopiedContent
+	buildCopiedContent,
+	getCtrlCCopyStatusPresentation,
+	getAutoWordFallbackStatusPresentation
 };
