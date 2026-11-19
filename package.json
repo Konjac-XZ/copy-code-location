@@ -68,6 +68,38 @@
 				"when": "editorTextFocus"
 			}
 		],
+		"configuration": {
+			"title": "Copy Code Location",
+			"properties": {
+				"copy-code-location.trailingNewlines": {
+					"type": "integer",
+					"default": 1,
+					"minimum": 0,
+					"maximum": 10,
+					"description": "Number of newline characters appended after copied code blocks."
+				},
+				"copy-code-location.locationFormat": {
+					"type": "string",
+					"default": "line",
+					"enum": [
+						"line",
+						"lineAndColumn",
+						"lineAndColumnForPartialLines"
+					],
+					"enumItemLabels": [
+						"Line numbers",
+						"Line and column numbers",
+						"Columns for partial lines only"
+					],
+					"enumDescriptions": [
+						"Show line numbers for every copied location.",
+						"Show line and column numbers for every copied location.",
+						"Always show line numbers; show column numbers only for partial-line selections."
+					],
+					"description": "Choose which line and column numbers appear above copied code blocks."
+				}
+			}
+		},
 		"menus": {
 			"editor/context": [
 				{
