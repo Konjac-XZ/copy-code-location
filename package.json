@@ -78,6 +78,11 @@
 					"maximum": 10,
 					"description": "Number of newline characters appended after copied code blocks."
 				},
+				"copy-code-location.autoWordFallback": {
+					"type": "boolean",
+					"default": true,
+					"description": "Copy a partial single-line selection as plain text, without its path, line number, or Markdown code fence."
+				},
 				"copy-code-location.locationFormat": {
 					"type": "string",
 					"default": "line",
@@ -97,6 +102,11 @@
 						"Always show line numbers; show column numbers only for partial-line selections."
 					],
 					"description": "Choose which line and column numbers appear above copied code blocks."
+				},
+				"copy-code-location.jsonObjectFallback": {
+					"type": "boolean",
+					"default": true,
+					"description": "Copy a complete valid JSON object as plain text, without its path, line number, or Markdown code fence."
 				}
 			}
 		},

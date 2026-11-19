@@ -2,6 +2,8 @@
 const vscode = require('vscode');
 const LanguageResolver = require('./languageResolver');
 
+const AUTO_WORD_FALLBACK_SETTING_KEY = 'autoWordFallback';
+const JSON_OBJECT_FALLBACK_SETTING_KEY = 'jsonObjectFallback';
 const LOCATION_FORMAT_SETTING_KEY = 'locationFormat';
 const LEGACY_SHOW_COLUMN_NUMBERS_SETTING_KEY = 'showColumnNumbers';
 const LEGACY_OMIT_LINE_NUMBERS_SETTING_KEY = 'omitLineNumbersForCompleteLines';
@@ -71,6 +73,26 @@ function getTrailingNewlineCount() {
 	return vscode.workspace
 		.getConfiguration('copy-code-location')
 		.get('trailingNewlines', 1);
+}
+
+/**
+ * Get whether partial single-line selections should fall back to plain text.
+ * @returns {boolean}
+ */
+function getAutoWordFallbackEnabled() {
+	return vscode.workspace
+		.getConfiguration('copy-code-location')
+		.get(AUTO_WORD_FALLBACK_SETTING_KEY, true);
+}
+
+/**
+ * Get whether complete JSON object selections should fall back to plain text.
+ * @returns {boolean}
+ */
+function getJsonObjectFallbackEnabled() {
+	return vscode.workspace
+		.getConfiguration('copy-code-location')
+		.get(JSON_OBJECT_FALLBACK_SETTING_KEY, true);
 }
 
 /**
@@ -235,6 +257,46 @@ function isCompleteLineSelection(document, selection) {
 }
 
 /**
+ * Determine whether a selection is a strict substring of its trimmed line.
+ * @param {vscode.TextDocument} document - The active document
+ * @param {vscode.Selection} selection - The effective selection
+ * @param {string} selectedText - Text contained in the selection
+ * @returns {boolean} Whether path formatting should be bypassed
+ */
+function shouldUseAutoWordFallback(document, selection, selectedText) {
+	if (selection.start.line !== selection.end.line) {
+		return false;
+	}
+
+	const trimmedSelectedText = selectedText.trim();
+	const trimmedLineText = document.lineAt(selection.start.line).text.trim();
+	return trimmedSelectedText.length < trimmedLineText.length;
+}
+
+/**
+ * Determine whether text is exactly one valid JSON object after removing
+ * surrounding whitespace and an optional UTF-8 BOM.
+ * @param {string} selectedText - Text contained in the selection
+ * @returns {boolean} Whether the selection is a complete JSON object
+ */
+function isCompleteJsonObject(selectedText) {
+	const normalizedText = selectedText.trim().replace(/^\uFEFF/, '');
+
+	if (normalizedText.length === 0) {
+		return false;
+	}
+
+	try {
+		const parsedValue = JSON.parse(normalizedText);
+		return parsedValue !== null
+			&& typeof parsedValue === 'object'
+			&& !Array.isArray(parsedValue);
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Format one or more selected snippets as independent Markdown code blocks.
  * @param {string} displayPath - The path displayed above every snippet
  * @param {string} languageId - The Markdown language identifier
@@ -293,7 +355,22 @@ async function copyCodeWithPath(useAbsolutePath) {
 			? Math.max(1, document.lineAt(selection.end.line - 1).text.length)
 			: Math.max(1, selection.end.character)
 	}));
+	const autoWordFallbackEnabled = getAutoWordFallbackEnabled();
+	const jsonObjectFallbackEnabled = getJsonObjectFallbackEnabled();
 	const locationFormat = getLocationFormat();
+
+	if (
+		snippets.length > 0
+		&& snippets.every(({ selection, text }) =>
+			(autoWordFallbackEnabled
+				&& shouldUseAutoWordFallback(document, selection, text))
+			|| (jsonObjectFallbackEnabled && isCompleteJsonObject(text))
+		)
+	) {
+		await vscode.env.clipboard.writeText(snippets.map(({ text }) => text).join('\n'));
+		vscode.window.setStatusBarMessage('$(check) Copied as plain text', 2000);
+		return;
+	}
 
 	// Format the output
 	const formattedContent = buildCopiedContent(
@@ -388,5 +465,7 @@ module.exports = {
 	isCompleteLineSelection,
 	getLegacyLocationFormat,
 	normalizeLocationFormat,
+	shouldUseAutoWordFallback,
+	isCompleteJsonObject,
 	buildCopiedContent
 };
